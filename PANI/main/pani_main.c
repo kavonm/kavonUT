@@ -15,7 +15,7 @@ S32 main()
 {
     PsifSipANI *pAccessNetworkInfo;
     SiCgPtyNum *cgPtyNumS;
-    S8 *gstnStr = "GSTN; gstn-location=\"12345678\"";
+    S8 *gstnStr = "GSTN; gstn-location=\"923456789\"";
 	U8  i;
 
 	pool = CreateMemoryPool(MEMORY_POOL_SIZE);
@@ -25,10 +25,11 @@ S32 main()
 	}
     pAccessNetworkInfo = (PsifSipANI *)Calloc(pool, sizeof(PsifSipANI));
     pAccessNetworkInfo->pres = PRSNT_NODEF;
-    strcpy(pAccessNetworkInfo->aniValue, gstnStr);    
+    strcpy(pAccessNetworkInfo->aniValue, gstnStr);
 
-    cgPtyNumS = (SiCgPtyNum *)Calloc(pool, sizeof(cgPtyNumS));
-    ccParsePANI(pAccessNetworkInfo, cgPtyNumS);
+	DP("############################################\n");
+    cgPtyNumS = (SiCgPtyNum *)Calloc(pool, sizeof(SiCgPtyNum));
+    ccParsePANIForGstnLoc(pAccessNetworkInfo, cgPtyNumS);
     if (cgPtyNumS->eh.pres == PRSNT_NODEF)
 	{
 		DP("Mapped location number is as follows:\n");
@@ -60,10 +61,10 @@ S32 main()
 	}
 
 	/* go ahead to rebuild a PANI hdr */
+	DP("############################################\n");
 	memset(pAccessNetworkInfo, 0, sizeof(PsifSipANI));
 	ccBuildPANI(cgPtyNumS, pAccessNetworkInfo);
 
-	DP("############################################\n");
 	DP("Mapped PANI hdr is as follows:\n");
 	DP("pAccessNetworkInfo->pres = %d\n", pAccessNetworkInfo->pres);
 	DP("pAccessNetworkInfo->aniValue = %s\n", pAccessNetworkInfo->aniValue);

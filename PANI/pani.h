@@ -13,7 +13,7 @@
 #define CC_ODDEVEN_MASK            0x80
 #define CC_SCRNIND_MASK            0x03
 #define CC_APRI_MASK               0x0C
-#define CC_NP_MASK                 0x7F
+#define CC_NP_MASK                 0x70
 #define CC_INNIND_MASK             0x80
 
 #define SIP_ACCESS_NETWORKINFO_LEN 256

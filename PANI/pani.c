@@ -142,11 +142,11 @@ PUBLIC S16 ccBcdToAscii(S8 *srcP, U8 srcLen, U8 *dstP, U8 *dstLen, U8 oddEven)
        }
     }
 
-    DP("ccBcdToAscii: ascii(%02d): %s\n", *dstLen, d);
     return ROK;
 }
 
-PUBLIC S16 ccParsePANI(PsifSipANI *pAccessNetworkInfo, SiCgPtyNum *cgPtyNumS)
+/* TODO replace number with MACRO */
+PUBLIC S16 ccParsePANIForGstnLoc(PsifSipANI *pAccessNetworkInfo, SiCgPtyNum *cgPtyNumS)
 {
     if ((pAccessNetworkInfo == NULL) && (cgPtyNumS == NULL))
     {
@@ -160,9 +160,10 @@ PUBLIC S16 ccParsePANI(PsifSipANI *pAccessNetworkInfo, SiCgPtyNum *cgPtyNumS)
     	return RFAILED;
     }
 
+    S32 ret;
     S8 *aniValue = pAccessNetworkInfo->aniValue; 
-    U8  aniLen = strlen(aniValue);
-    S8 *gstnStr;
+    U8  aniLen  = strlen(aniValue);
+    S8 *gstnStr = NULL;
 	S8  paramVal[32];
 	U8  paramSize = 32;
 	U8  ch;
@@ -224,7 +225,7 @@ PUBLIC S16 ccParsePANI(PsifSipANI *pAccessNetworkInfo, SiCgPtyNum *cgPtyNumS)
         return RFAILED;
 	}
 
-    DP("gstnStr is %s\n", gstnStr);
+    DP("gstn-location is %s\n", gstnStr);
 
 	if (*gstnStr == CC_ASCII_DOUBLE_QUOTES)
 	{
@@ -237,7 +238,7 @@ PUBLIC S16 ccParsePANI(PsifSipANI *pAccessNetworkInfo, SiCgPtyNum *cgPtyNumS)
 
 		if (i == paramSize - 1)
 		{
-			DP("Miss right quote\n");
+			DP("Miss right double quote or invalid format\n");
 			i = 0;
 		}
 	    paramVal[i] = CC_ASCII_NULL;
@@ -254,13 +255,13 @@ PUBLIC S16 ccParsePANI(PsifSipANI *pAccessNetworkInfo, SiCgPtyNum *cgPtyNumS)
         return RFAILED;
 	}
 
-    ch = ccAscToHex(paramVal[0]);
+    ch = (ccAscToHex(paramVal[0]) << 4) | (ccAscToHex(paramVal[1]));
 	cgPtyNumS->natAddrInd.pres = PRSNT_NODEF;
 	cgPtyNumS->natAddrInd.val  = ch & CC_NOA_MASK;
 	cgPtyNumS->oddEven.pres    = PRSNT_NODEF;
 	cgPtyNumS->oddEven.val     = (ch & CC_ODDEVEN_MASK) >> 7;
 
-    ch = ccAscToHex(paramVal[1]);
+    ch = (ccAscToHex(paramVal[2]) << 4) | (ccAscToHex(paramVal[3]));
 	cgPtyNumS->scrnInd.pres    = PRSNT_NODEF;
 	cgPtyNumS->scrnInd.val     = ch & CC_SCRNIND_MASK;
 	cgPtyNumS->presRest.pres   = PRSNT_NODEF;
@@ -271,7 +272,139 @@ PUBLIC S16 ccParsePANI(PsifSipANI *pAccessNetworkInfo, SiCgPtyNum *cgPtyNumS)
 	cgPtyNumS->niInd.val       = (ch & CC_INNIND_MASK) >> 7;
 
 	cgPtyNumS->addrSig.pres    = PRSNT_NODEF;
-    ccAsciiToBcd(&paramVal[2], strlen(&paramVal[2]), cgPtyNumS->addrSig.val, &cgPtyNumS->addrSig.len);
+    ret = ccAsciiToBcd(&paramVal[4], strlen(&paramVal[4]), cgPtyNumS->addrSig.val, &cgPtyNumS->addrSig.len);
+    if (ret != ROK)
+    {
+        DP("address signals are invalid\n");
+        return RFAILED;
+    }
+
+	cgPtyNumS->eh.pres = PRSNT_NODEF;
+
+    return ROK;
+}
+
+PUBLIC S16 ccParsePANIForOperSpecCgi(PsifSipANI *pAccessNetworkInfo, SiCgPtyNum *cgPtyNumS)
+{
+    if ((pAccessNetworkInfo == NULL) && (cgPtyNumS == NULL))
+    {
+    	DP("NULL Pointer\n");
+    	return RFAILED;
+    }
+
+    if (pAccessNetworkInfo->pres == NOTPRSNT)
+    {
+    	DP("No P-Access-Network-Info hdr\n");
+    	return RFAILED;
+    }
+
+    S32 ret;
+    S8 *aniValue = pAccessNetworkInfo->aniValue; 
+    U8  aniLen  = strlen(aniValue);
+    S8 *gstnStr = NULL;
+	S8  paramVal[32];
+	U8  paramSize = 32;
+	U8  ch;
+	U8  i = 0;
+
+    if (aniLen == 0)
+    {
+        DP("No Content in P-Access-Network-Info hdr\n");
+        return RFAILED;
+    }
+
+    gstnStr = strstr(aniValue, "GSTN;");
+    if (gstnStr == NULL)
+	{
+        DP("No access-type GSTN in P-Access-Network-Info hdr\n");
+        return RFAILED;
+	}
+
+    DP("gstnStr is %s\n", gstnStr);
+
+	gstnStr += strlen("GSTN;");
+
+	CC_CLR_LEADING_LWS(gstnStr);
+
+	if (gstnStr >= aniValue + aniLen)
+	{
+        DP("No parameter value\n");
+        return RFAILED;
+	}
+
+    if (strncmp(gstnStr, "operator-specific-GI", strlen("operator-specific-GI")) != 0)
+	{
+        DP("No operator-specific-GI access info\n");
+        return RFAILED;
+	}
+
+	gstnStr += strlen("operator-specific-GI");
+
+	CC_CLR_LEADING_LWS(gstnStr);
+
+	if (gstnStr >= aniValue + aniLen)
+	{
+        DP("No parameter value\n");
+        return RFAILED;
+	}
+
+	if (*gstnStr != CC_ASCII_EQUAL)
+	{
+        DP("%c is not \"=\"\n", *gstnStr);
+        return RFAILED;
+	}
+	gstnStr++;
+
+	CC_CLR_LEADING_LWS(gstnStr);
+
+	if (gstnStr >= aniValue + aniLen)
+	{
+        DP("No parameter value\n");
+        return RFAILED;
+	}
+
+    DP("operator-specific-GI is %s\n", gstnStr);
+
+	if (*gstnStr == CC_ASCII_DOUBLE_QUOTES)
+	{
+	    gstnStr++;  	
+		
+		while ((i < paramSize - 1) && (*gstnStr != CC_ASCII_DOUBLE_QUOTES))
+		{
+			paramVal[i++] = *gstnStr++;
+		}
+
+		if (i == paramSize - 1)
+		{
+			DP("Miss right double quote or invalid format\n");
+			i = 0;
+		}
+	    paramVal[i] = CC_ASCII_NULL;
+	}
+	else
+	{
+        strcpy(paramVal, gstnStr);
+	}
+
+    DP("paramVal is %s\n", paramVal);
+	if (paramVal[0] == CC_ASCII_NULL)
+	{
+        DP("Miss operator-specific-GI mandatory field\n");
+        return RFAILED;
+	}
+
+	cgPtyNumS->addrSig.pres    = PRSNT_NODEF;
+    ret = ccAsciiToBcd(paramVal, strlen(paramVal), cgPtyNumS->addrSig.val, &cgPtyNumS->addrSig.len);
+    if (ret != ROK)
+    {
+        DP("address signals are invalid\n");
+        return RFAILED;
+    }
+
+	cgPtyNumS->oddEven.pres    = PRSNT_NODEF;
+	cgPtyNumS->oddEven.val     = strlen(paramVal) & 1;
+	cgPtyNumS->niInd.pres      = PRSNT_NODEF;
+	cgPtyNumS->niInd.val       = 0x01;
 
 	cgPtyNumS->eh.pres = PRSNT_NODEF;
 
@@ -330,14 +463,15 @@ PUBLIC S16 ccBuildPANI(SiCgPtyNum *cgPtyNumS, PsifSipANI *pAccessNetworkInfo)
 
 	for (i = 0; i < 2; i++)
 	{
-		paramVal[i] = ccHexToAsc(ch[i]);
+		paramVal[2*i] = ccHexToAsc((ch[i] & 0xf0) >> 4);
+		paramVal[2*i + 1] = ccHexToAsc(ch[i] & 0x0f);
 	}
 
 	if (cgPtyNumS->addrSig.pres = PRSNT_NODEF)
 	{
 		pAccessNetworkInfo->pres = PRSNT_NODEF;
-        ccBcdToAscii(cgPtyNumS->addrSig.val, cgPtyNumS->addrSig.len, &paramVal[2], &addrLen, cgPtyNumS->oddEven.val);
-		paramVal[addrLen + 2] = CC_ASCII_NULL;
+        ccBcdToAscii(cgPtyNumS->addrSig.val, cgPtyNumS->addrSig.len, &paramVal[4], &addrLen, cgPtyNumS->oddEven.val);
+		paramVal[addrLen + 4] = CC_ASCII_NULL;
 
         sprintf(gstnStr, "GSTN; gstn-location=\"%s\"", paramVal);
 		strcpy(pAccessNetworkInfo->aniValue, gstnStr);

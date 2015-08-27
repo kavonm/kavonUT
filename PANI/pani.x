@@ -23,7 +23,8 @@ EXTERN U8  ccAscToHex(S8 asc);
 EXTERN S8  ccHexToAsc(U8 hex);
 EXTERN S16 ccAsciiToBcd(S8 *srcP, U8 srcLen, U8 *dstP, U8 *dstLen);
 EXTERN S16 ccBcdToAscii(S8 *srcP, U8 srcLen, U8 *dstP, U8 *dstLen, U8 oddEven);
-EXTERN S16 ccParsePANI(PsifSipANI *pAccessNetworkInfo, SiCgPtyNum *cgPtyNumS);
+EXTERN S16 ccParsePANIForGstnLoc(PsifSipANI *pAccessNetworkInfo, SiCgPtyNum *cgPtyNumS);
+EXTERN S16 ccParsePANIForOperSpecCgi(PsifSipANI *pAccessNetworkInfo, SiCgPtyNum *cgPtyNumS);
 EXTERN S16 ccBuildPANI(SiCgPtyNum *cgPtyNumS, PsifSipANI *pAccessNetworkInfo);
 
 #endif /*PANI_X_*/
